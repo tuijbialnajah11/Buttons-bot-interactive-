@@ -1,0 +1,6 @@
+{
+  "name": "WhatsApp Pairing Bot",
+  "description": "WhatsApp command bot with a web pairing console powered by Baileys.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
