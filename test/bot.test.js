@@ -2,10 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BOT_PREFIX, extractMessageText, getCommandReply, getInteractiveButtonConfig } from '../src/bot.js';
 
-test('uses a hyphen as the bot command prefix', () => {
+test('uses a hyphen and standard prefixes for bot commands', () => {
   assert.equal(BOT_PREFIX, '-');
   assert.match(getCommandReply('-ping'), /Pong/);
   assert.match(getCommandReply('  -PING  '), /Pong/);
+  assert.match(getCommandReply('.ping'), /Pong/);
+  assert.match(getCommandReply('!ping'), /Pong/);
+  assert.match(getCommandReply('/ping'), /Pong/);
+  assert.match(getCommandReply('@919876543210 -ping'), /Pong/);
+  assert.match(getCommandReply('@919876543210 ping'), /Pong/);
   assert.equal(getCommandReply('ping'), null);
   assert.equal(getCommandReply('hello -ping'), null);
 });

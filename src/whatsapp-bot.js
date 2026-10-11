@@ -280,8 +280,21 @@ export class WhatsAppBot {
     return socket;
   }
 
+  async reconnect() {
+    this.generation += 1;
+    this.#clearReconnectTimer();
+    const authState = await this.#loadAuthState();
+    if (!authState.state.creds.registered) {
+      throw httpError('No saved WhatsApp session found. Please enter your phone number to pair.', 404);
+    }
+    this.#setStatus('connecting', 'Reconnecting to your saved WhatsApp session…', {
+      phoneNumber: phoneFromCredentials(authState.state),
+    });
+    this.#attachSocket(authState);
+  }
+
   async #handleMessages(socket, event) {
-    if (this.socket !== socket || event?.type !== 'notify' || !Array.isArray(event.messages)) {
+    if (this.socket !== socket || !Array.isArray(event?.messages)) {
       return;
     }
 
@@ -291,8 +304,9 @@ export class WhatsAppBot {
         continue;
       }
 
+      const isGroup = chatId.endsWith('@g.us');
       const text = extractMessageText(message.message);
-      const reply = getCommandReply(text);
+      const reply = getCommandReply(text, { isGroup, appUrl: this.appUrl });
       if (!reply) {
         continue;
       }
@@ -306,8 +320,13 @@ export class WhatsAppBot {
   }
 
   async #sendReply(socket, chatId, replyText, commandText, originalMessage) {
+    const isGroup = chatId.endsWith('@g.us');
     const buttonConfig = getInteractiveButtonConfig(commandText, this.appUrl);
-    if (buttonConfig && typeof socket.relayMessage === 'function') {
+
+    // In private chats (DMs), relayMessage interactive buttons work well.
+    // In groups (@g.us), WhatsApp client often suppresses or ignores nativeFlowMessage buttons
+    // from non-business bot numbers. Using socket.sendMessage with quoted reply ensures 100% delivery in groups!
+    if (!isGroup && buttonConfig && typeof socket.relayMessage === 'function') {
       try {
         const interactiveMsg = this.#buildInteractiveButtonMessage(chatId, replyText, buttonConfig, originalMessage);
         await socket.relayMessage(chatId, interactiveMsg.message, { messageId: interactiveMsg.key.id });
@@ -317,7 +336,8 @@ export class WhatsAppBot {
       }
     }
 
-    await socket.sendMessage(chatId, { text: replyText });
+    // Standard reliable message with quoted context (works 100% in both groups and DMs)
+    await socket.sendMessage(chatId, { text: replyText }, { quoted: originalMessage });
   }
 
   #buildInteractiveButtonMessage(chatId, bodyText, buttonConfig, originalMessage) {

@@ -1,3 +1,4 @@
+export const BOT_PREFIXES = ['-', '.', '!', '/'];
 export const BOT_PREFIX = '-';
 const MAX_REPLY_LENGTH = 4096;
 
@@ -13,6 +14,8 @@ const MENU = [
   '-time  Show the current time',
   '-echo <text>  Echo your text',
   '-buttons [options]  Send interactive action buttons',
+  '',
+  '💡 *Tip:* In groups you can use -, ., !, / or tag the bot.',
 ].join('\n');
 
 function truncate(text) {
@@ -28,37 +31,73 @@ function truncate(text) {
   return `${text.slice(0, end)}…`;
 }
 
-export function getCommandReply(input) {
-  if (typeof input !== 'string') {
+function parseCommand(input) {
+  if (typeof input !== 'string') return null;
+  let text = input.trim();
+  if (!text) return null;
+
+  // Handle bot mentions in groups (e.g. "@919876543210 -ping" or "@919876543210 ping")
+  const mentionMatch = /^@\d+\s*/.exec(text);
+  if (mentionMatch) {
+    text = text.slice(mentionMatch[0].length).trim();
+  }
+
+  const matchedPrefix = BOT_PREFIXES.find((p) => text.startsWith(p));
+  if (matchedPrefix) {
+    const [raw = '', ...args] = text.slice(matchedPrefix.length).trim().split(/\s+/);
+    return {
+      command: raw.toLowerCase(),
+      rawCommand: raw,
+      argumentText: args.join(' '),
+      hasPrefix: true,
+    };
+  }
+
+  // If the user tagged the bot directly in a group without a prefix (e.g. "@bot ping" or "@bot menu")
+  if (mentionMatch) {
+    const [raw = '', ...args] = text.split(/\s+/);
+    return {
+      command: raw.toLowerCase(),
+      rawCommand: raw,
+      argumentText: args.join(' '),
+      hasPrefix: false,
+    };
+  }
+
+  return null;
+}
+
+export function getCommandReply(input, { isGroup = false, appUrl = '' } = {}) {
+  const parsed = parseCommand(input);
+  if (!parsed) {
     return null;
   }
 
-  const text = input.trim();
-  if (!text.startsWith(BOT_PREFIX)) {
-    return null;
-  }
-
-  const [rawCommand = '', ...args] = text.slice(BOT_PREFIX.length).trim().split(/\s+/);
-  const command = rawCommand.toLowerCase();
-  const argumentText = args.join(' ');
+  const { command, rawCommand, argumentText } = parsed;
+  const base = String(appUrl || '').replace(/\/+$/, '') || 'http://localhost:3000';
+  const previewUrl = `${base}/preview`;
 
   switch (command) {
     case 'ping':
       return '🏓 Pong! The bot is online.';
     case 'menu':
     case 'help':
-      return MENU;
+      return isGroup
+        ? `${MENU}\n\n🌐 *Webview Preview:* ${previewUrl}`
+        : MENU;
     case 'preview':
     case 'anime':
     case 'card':
-      return '🌸 *Mao Mao · Anime Card Preview*\nNeeche diye gaye button par click karein to open WhatsApp in-app browser preview:';
+      return `🌸 *Mao Mao · Anime Card Preview*\n\n🌐 *Live Webview Link:* ${previewUrl}\n\n_Tap the button or link above to open inside WhatsApp._`;
     case 'html': {
       const parts = argumentText.split('|').map((p) => p.trim()).filter(Boolean);
       const title = parts[0] || 'Custom Live Preview';
-      return `✨ *${title}*\nNeeche CTA button tap karein to view live in-app preview:`;
+      const desc = parts[1] || 'Rendered inside WhatsApp In-App Webview';
+      const customUrl = `${base}/preview?title=${encodeURIComponent(title)}&desc=${encodeURIComponent(desc)}`;
+      return `✨ *${title}*\n\n🌐 *In-App View:* ${customUrl}`;
     }
     case 'about':
-      return 'I am a WhatsApp command bot with interactive buttons and in-app HTML preview support. Send -menu to see what I can do.';
+      return 'I am a WhatsApp command bot with interactive buttons and group support. Send -menu to see what I can do.';
     case 'time':
       return `Current time: ${new Intl.DateTimeFormat('en-IN', {
         dateStyle: 'medium',
@@ -83,13 +122,10 @@ export function getCommandReply(input) {
 }
 
 export function getInteractiveButtonConfig(input, appUrl = '') {
-  if (typeof input !== 'string') return null;
-  const text = input.trim();
-  if (!text.startsWith(BOT_PREFIX)) return null;
+  const parsed = parseCommand(input);
+  if (!parsed) return null;
 
-  const [rawCommand = '', ...args] = text.slice(BOT_PREFIX.length).trim().split(/\s+/);
-  const command = rawCommand.toLowerCase();
-  const argumentText = args.join(' ');
+  const { command, argumentText } = parsed;
   const base = String(appUrl || '').replace(/\/+$/, '') || 'http://localhost:3000';
   const previewUrl = `${base}/preview`;
 

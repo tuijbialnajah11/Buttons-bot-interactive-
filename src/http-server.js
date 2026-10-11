@@ -131,6 +131,19 @@ export function createHttpServer({ bot, logger = console }) {
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/api/reconnect') {
+      if (typeof bot.reconnect !== 'function') {
+        sendJson(res, 501, { error: 'Reconnect is not supported.' });
+        return;
+      }
+
+      Promise.resolve(bot.reconnect()).catch((error) => {
+        logger.error?.(`Reconnect failed: ${error?.message ?? error}`);
+      });
+      sendJson(res, 202, { ok: true, message: 'Reconnecting to your saved WhatsApp session…' });
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/disconnect') {
       if (typeof bot.disconnect !== 'function') {
         sendJson(res, 501, { error: 'Disconnect is not supported.' });

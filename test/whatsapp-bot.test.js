@@ -112,6 +112,32 @@ test('relays interactive button messages when socket supports relayMessage', asy
   assert.ok(relayed[0].message?.viewOnceMessage?.message?.interactiveMessage);
 });
 
+test('responds to commands in WhatsApp groups and quotes original message', async (t) => {
+  const { bot, sockets } = await makeBot(t);
+  await bot.requestPairingCode('919876543210');
+  const socket = sockets[0];
+  const groupSent = [];
+  socket.sendMessage = async (jid, message, options) => {
+    groupSent.push({ jid, message, options });
+  };
+
+  socket.ev.emit('messages.upsert', {
+    type: 'notify',
+    messages: [
+      {
+        key: { remoteJid: '120363021234567890@g.us', participant: '919876543210@s.whatsapp.net' },
+        message: { extendedTextMessage: { text: '.ping' } },
+      },
+    ],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(groupSent.length, 1);
+  assert.equal(groupSent[0].jid, '120363021234567890@g.us');
+  assert.equal(groupSent[0].message.text, '🏓 Pong! The bot is online.');
+  assert.ok(groupSent[0].options?.quoted);
+});
+
 test('rejects a second pairing request while a session is active', async (t) => {
   const { bot } = await makeBot(t);
   await bot.requestPairingCode('919876543210');
