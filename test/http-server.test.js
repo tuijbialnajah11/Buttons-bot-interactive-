@@ -28,6 +28,10 @@ test('serves the browser dashboard and current session status', async () => {
     const status = await fetch(`${baseUrl}/api/status`);
     assert.deepEqual(await status.json(), { state: 'idle', pairingCode: '' });
 
+    const preview = await fetch(`${baseUrl}/preview?title=MaoMaoTest`);
+    assert.equal(preview.status, 200);
+    assert.match(await preview.text(), /MaoMaoTest/);
+
     const health = await fetch(`${baseUrl}/healthz`);
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), { ok: true });

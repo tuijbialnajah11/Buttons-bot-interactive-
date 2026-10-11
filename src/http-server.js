@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { normalizePhoneNumber } from './whatsapp-bot.js';
+import { renderPreviewHtml } from './preview-html.js';
 
 const publicDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '../public');
 const staticFiles = new Map([
@@ -82,6 +83,15 @@ export function createHttpServer({ bot, logger = console }) {
 
     if (req.method === 'GET' && url.pathname === '/healthz') {
       sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === 'GET' && (url.pathname === '/preview' || url.pathname.startsWith('/preview/'))) {
+      const title = url.searchParams.get('title') || 'Mao Mao · Anime Preview';
+      const description = url.searchParams.get('desc') || 'Live interactive HTML card rendered inside WhatsApp in-app browser.';
+      const character = url.searchParams.get('character') || 'Mao Mao (猫猫)';
+      const html = renderPreviewHtml({ title, description, character });
+      send(res, 200, html, 'text/html; charset=utf-8');
       return;
     }
 

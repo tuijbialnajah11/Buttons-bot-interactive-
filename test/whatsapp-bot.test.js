@@ -76,18 +76,40 @@ test('only responds to prefixed incoming messages and ignores own/status message
   socket.ev.emit('messages.upsert', {
     type: 'notify',
     messages: [
-      { key: { remoteJid: '123@s.whatsapp.net' }, message: { conversation: '-ping' } },
+      { key: { remoteJid: '123@s.whatsapp.net' }, message: { conversation: '-echo test message' } },
       { key: { remoteJid: '456@s.whatsapp.net' }, message: { conversation: 'hello' } },
-      { key: { remoteJid: '789@s.whatsapp.net', fromMe: true }, message: { conversation: '-ping' } },
-      { key: { remoteJid: 'status@broadcast' }, message: { conversation: '-ping' } },
+      { key: { remoteJid: '789@s.whatsapp.net', fromMe: true }, message: { conversation: '-echo test message' } },
+      { key: { remoteJid: 'status@broadcast' }, message: { conversation: '-echo test message' } },
     ],
   });
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(socket.sent, [{
     jid: '123@s.whatsapp.net',
-    message: { text: '🏓 Pong! The bot is online.' },
+    message: { text: 'test message' },
   }]);
+});
+
+test('relays interactive button messages when socket supports relayMessage', async (t) => {
+  const { bot, sockets } = await makeBot(t);
+  await bot.requestPairingCode('919876543210');
+  const socket = sockets[0];
+  const relayed = [];
+  socket.relayMessage = async (jid, message, options) => {
+    relayed.push({ jid, message, options });
+  };
+
+  socket.ev.emit('messages.upsert', {
+    type: 'notify',
+    messages: [
+      { key: { remoteJid: 'user123@s.whatsapp.net' }, message: { conversation: '-menu' } },
+    ],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(relayed.length, 1);
+  assert.equal(relayed[0].jid, 'user123@s.whatsapp.net');
+  assert.ok(relayed[0].message?.viewOnceMessage?.message?.interactiveMessage);
 });
 
 test('rejects a second pairing request while a session is active', async (t) => {

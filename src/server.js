@@ -19,6 +19,11 @@ const defaultAuthDir = join(
 const authDir = resolve(process.env.AUTH_DIR || defaultAuthDir);
 const logger = console;
 const baileysLogger = pino({ level: process.env.BAILEYS_LOG_LEVEL || 'silent' });
+const appUrl = (
+  process.env.APP_URL ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '') ||
+  `http://localhost:${port}`
+).replace(/\/+$/, '');
 
 const bot = new WhatsAppBot({
   authDir,
@@ -29,6 +34,7 @@ const bot = new WhatsAppBot({
     printQRInTerminal: false,
   }),
   logger,
+  appUrl,
 });
 
 await bot.restore();

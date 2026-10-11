@@ -1,5 +1,6 @@
 import { chmod, mkdir, rm } from 'node:fs/promises';
-import { extractMessageText, getCommandReply } from './bot.js';
+import { generateWAMessageFromContent, proto } from '@whiskeysockets/baileys';
+import { extractMessageText, getCommandReply, getInteractiveButtonConfig } from './bot.js';
 
 function httpError(message, statusCode) {
   const error = new Error(message);
@@ -32,7 +33,7 @@ function phoneFromCredentials(authState) {
 }
 
 export class WhatsAppBot {
-  constructor({ authDir, authStateLoader, socketFactory, logger = console }) {
+  constructor({ authDir, authStateLoader, socketFactory, logger = console, appUrl = '' }) {
     if (!authDir || typeof authStateLoader !== 'function' || typeof socketFactory !== 'function') {
       throw new TypeError('WhatsAppBot requires authDir, authStateLoader, and socketFactory.');
     }
@@ -41,6 +42,7 @@ export class WhatsAppBot {
     this.authStateLoader = authStateLoader;
     this.socketFactory = socketFactory;
     this.logger = logger;
+    this.appUrl = String(appUrl || process.env.APP_URL || '').replace(/\/+$/, '');
     this.socket = null;
     this.pendingOperation = null;
     this.reconnectTimer = null;
@@ -296,11 +298,72 @@ export class WhatsAppBot {
       }
 
       try {
-        await socket.sendMessage(chatId, { text: reply });
+        await this.#sendReply(socket, chatId, reply, text, message);
       } catch (error) {
         this.logger.error?.(`Could not reply to a WhatsApp command: ${error?.message ?? error}`);
       }
     }
+  }
+
+  async #sendReply(socket, chatId, replyText, commandText, originalMessage) {
+    const buttonConfig = getInteractiveButtonConfig(commandText, this.appUrl);
+    if (buttonConfig && typeof socket.relayMessage === 'function') {
+      try {
+        const interactiveMsg = this.#buildInteractiveButtonMessage(chatId, replyText, buttonConfig, originalMessage);
+        await socket.relayMessage(chatId, interactiveMsg.message, { messageId: interactiveMsg.key.id });
+        return;
+      } catch (err) {
+        this.logger.warn?.(`Could not send button message via relayMessage: ${err?.message ?? err}`);
+      }
+    }
+
+    await socket.sendMessage(chatId, { text: replyText });
+  }
+
+  #buildInteractiveButtonMessage(chatId, bodyText, buttonConfig, originalMessage) {
+    const formattedButtons = buttonConfig.buttons.map((btn) => {
+      if (btn.type === 'url') {
+        return {
+          name: 'cta_url',
+          buttonParamsJson: JSON.stringify({
+            display_text: btn.text,
+            url: btn.url,
+            merchant_url: btn.url,
+          }),
+        };
+      }
+      return {
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: btn.text,
+          id: btn.id,
+        }),
+      };
+    });
+
+    return generateWAMessageFromContent(
+      chatId,
+      {
+        viewOnceMessage: {
+          message: {
+            interactiveMessage: proto.Message.InteractiveMessage.create({
+              body: proto.Message.InteractiveMessage.Body.create({ text: bodyText }),
+              footer: proto.Message.InteractiveMessage.Footer.create({
+                text: buttonConfig.footer || 'Mao Mao Bot · Powered by Baileys 7.0',
+              }),
+              header: proto.Message.InteractiveMessage.Header.create({
+                title: buttonConfig.header || 'Mao Mao Bot 🤖',
+                hasMediaAttachment: false,
+              }),
+              nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                buttons: formattedButtons,
+              }),
+            }),
+          },
+        },
+      },
+      { quoted: originalMessage },
+    );
   }
 
   #handleConnectionUpdate(socket, authState, update) {
