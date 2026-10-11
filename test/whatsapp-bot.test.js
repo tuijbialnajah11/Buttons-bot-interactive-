@@ -126,7 +126,7 @@ test('responds to commands in WhatsApp groups and quotes original message', asyn
     messages: [
       {
         key: { remoteJid: '120363021234567890@g.us', participant: '919876543210@s.whatsapp.net' },
-        message: { extendedTextMessage: { text: '.ping' } },
+        message: { extendedTextMessage: { text: '-ping' } },
       },
     ],
   });

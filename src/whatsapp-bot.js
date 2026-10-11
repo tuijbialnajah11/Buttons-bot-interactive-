@@ -320,13 +320,9 @@ export class WhatsAppBot {
   }
 
   async #sendReply(socket, chatId, replyText, commandText, originalMessage) {
-    const isGroup = chatId.endsWith('@g.us');
     const buttonConfig = getInteractiveButtonConfig(commandText, this.appUrl);
 
-    // In private chats (DMs), relayMessage interactive buttons work well.
-    // In groups (@g.us), WhatsApp client often suppresses or ignores nativeFlowMessage buttons
-    // from non-business bot numbers. Using socket.sendMessage with quoted reply ensures 100% delivery in groups!
-    if (!isGroup && buttonConfig && typeof socket.relayMessage === 'function') {
+    if (buttonConfig && typeof socket.relayMessage === 'function') {
       try {
         const interactiveMsg = this.#buildInteractiveButtonMessage(chatId, replyText, buttonConfig, originalMessage);
         await socket.relayMessage(chatId, interactiveMsg.message, { messageId: interactiveMsg.key.id });
@@ -336,7 +332,7 @@ export class WhatsAppBot {
       }
     }
 
-    // Standard reliable message with quoted context (works 100% in both groups and DMs)
+    // Standard reliable message with quoted context
     await socket.sendMessage(chatId, { text: replyText }, { quoted: originalMessage });
   }
 
